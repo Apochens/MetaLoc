@@ -10,7 +10,6 @@
 
 using namespace llvm;
 
-using BBSet = DenseSet<BasicBlock *>;
 using Inst = std::pair<hash_code, StringRef>;
 
 /// @brief Debug location collector. 
@@ -30,16 +29,15 @@ private:
     DenseMap<hash_code, DenseSet<int>> BBToDebugLocs;
 
     BasicBlock *EntryBB;
-    BBSet ExitBBs;
+    DenseSet<BasicBlock *> ExitBBs;
     DenseMap<BasicBlock *, unsigned> BBCount;
-
 
     void collect(Function *F) {
         collectEntryAndExitBBs(F);
+        collectDebugLocOnAllPaths();
         // compute all debug locations in each basic block
         for (BasicBlock &BB: *F) {
-            // collectDebugLocationsOnSimplePathsOf(&BB);
-            collectCompDLOnControlFlowPaths(&BB);
+            // collectCompDLOnControlFlowPaths(&BB);
             outs() << "DLSet<" << BB.getName() << ">: ";
             for (int line: BBToDebugLocs[hash_value(&BB)]) {
                 outs() << line << " ";
@@ -55,16 +53,54 @@ private:
     void collectEntryAndExitBBs(Function *F) {
         EntryBB = &F->getEntryBlock();
         for (BasicBlock &BB: *F) {
-            BBCount[&BB] = 0;
+            BBCount[&BB] = 0;   // Initialize the count
+            BBToDebugLocs[hash_value(&BB)] = {};    // Initialize the debug location set
             if (isa<ReturnInst>(BB.getTerminator())) {
                 ExitBBs.insert(&BB);
             }
         }
     }
 
+    void collectDebugLocOnAllPaths() {
+        DFS(EntryBB);
+    }
+
+    void DFS(BasicBlock *CurrentBB) {        
+        if (ExitBBs.contains(CurrentBB)) { // Reach one of the exits
+            DenseSet<unsigned> DebugLocSet;
+            BBCount[CurrentBB] += 1;
+            // Collect debug locations along the path
+            for (auto [BB, count]: BBCount) {
+                if (count == 0) continue;
+                for (Instruction &I: *BB) {
+                    if (const DebugLoc &DL = I.getDebugLoc())
+                        if (DL.getLine() != 0)
+                            DebugLocSet.insert(DL.getLine());
+                }
+            }
+
+            for (auto [BB, count]: BBCount) {
+                if (count == 0) continue;
+                for (auto line: DebugLocSet)
+                    BBToDebugLocs[hash_value(BB)].insert(line);
+            }
+            BBCount[CurrentBB] -= 1;
+            return ;
+        }
+
+        bool IsHeader = BBCount[CurrentBB] > 0; // We encounter a visited basic block.
+        BBCount[CurrentBB] += 1;
+        for (succ_iterator SI = succ_begin(CurrentBB), EI = succ_end(CurrentBB); SI != EI; ++SI) {
+            BasicBlock *SuccBB = *SI;
+            if (IsHeader && BBCount[SuccBB])
+                continue;
+            DFS(SuccBB);
+        }
+        BBCount[CurrentBB] -= 1;
+    }
+
     void collectCompDLOnControlFlowPaths(BasicBlock *TargetBB) {
         // Collect the compatible debug locations
-        BBToDebugLocs[hash_value(TargetBB)] = {};
         DFS4TargetBB(EntryBB, TargetBB);
     }
 
@@ -72,7 +108,7 @@ private:
         // Reach the exits
         if (ExitBBs.contains(CurrentBB)) {
             BBCount[CurrentBB] += 1;
-            if (BBCount[CurrentBB]) {
+            if (BBCount[TargetBB]) {
                 for (auto [BB, count] : BBCount) {
                     if (count == 0) continue;
                     for (Instruction &I : *BB) {
@@ -100,69 +136,6 @@ private:
         }
 
         BBCount[CurrentBB] -= 1;
-    }
-
-    void DFS(BasicBlock *FromBB, BasicBlock *ToBB, BBSet &VisitedBBs, bool IsBackward=false) {
-        // If `BB` has been visited, there is a loop.
-        if (VisitedBBs.count(FromBB)) return ;
-        
-        if (FromBB == ToBB) {
-            // outs().changeColor(outs().BRIGHT_RED, true);
-            // outs() << "Path<" << ToBB->getName() << ">: ";
-            // Save all debug locations along the path
-            for (BasicBlock *BB: VisitedBBs) {
-                // outs() << BB->getName() << " ";
-                for (Instruction &I: *BB) {
-                    if (const DebugLoc &DL = I.getDebugLoc()) {
-                        if (DL.getLine() != 0)
-                            BBToDebugLocs[hash_value(ToBB)].insert(DL.getLine());
-                    }
-                }
-            }
-            // outs() << "\n";
-            // outs().resetColor();
-        } else {
-            // Go to the next basic block
-            VisitedBBs.insert(FromBB);
-            if (IsBackward) {
-                for (pred_iterator PI = pred_begin(FromBB), PE = pred_end(FromBB); PI != PE; ++PI) {
-                    BasicBlock *PredBB = *PI;
-                    DFS(PredBB, ToBB, VisitedBBs, IsBackward);
-                }
-            } else {
-                for (succ_iterator SI = succ_begin(FromBB), SE = succ_end(FromBB); SI != SE; ++SI) {
-                    BasicBlock *SuccBB = *SI;
-                    DFS(SuccBB, ToBB, VisitedBBs, IsBackward);
-                }
-            }
-        }
-
-        VisitedBBs.erase(FromBB);
-    }
-
-    void collectDebugLocationsOnSimplePathsOf(BasicBlock *TargetBB) {
-        BBToDebugLocs[hash_value(TargetBB)] = {};
-        BBSet VisitedBBs;
-
-        // Collect debug locations on simple paths [EntryBB, ..., TargetBB)
-        // Do not collect debug locations in TargetBB to reduce the duplicate computation
-        if (EntryBB != TargetBB)
-            DFS(EntryBB, TargetBB, VisitedBBs);
-
-        // Collect debug locations on simple paths (TargetBB, ..., ExitBB]
-        // Do not collect debug locations in TargetBB to reduce the duplicate computation
-        for (BasicBlock *ExitBB: ExitBBs) {
-            if (ExitBB != TargetBB)
-                DFS(ExitBB, TargetBB, VisitedBBs, true);
-        }
-
-        // Collect debug locations of TargetBB
-        for (Instruction &I: *TargetBB) {
-            if (const DebugLoc &DL = I.getDebugLoc()) {
-                if (DL.getLine() != 0)
-                    BBToDebugLocs[hash_value(TargetBB)].insert(DL.getLine());
-            }
-        }
     }
 };
 
