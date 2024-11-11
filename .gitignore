@@ -1,3 +1,7 @@
 /target
 /cprogs
 /instrumented
+
+.DS_Store
+.vscode
+.venv
