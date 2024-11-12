@@ -119,8 +119,11 @@ impl<'tree> Instrumenter {
         let root_node = tree.root_node();
 
         self.visit_header_includes(get_children_of_kind(&root_node, "preproc_include"));
-        self.visit_using_decls(get_children_of_kind(&root_node, "using_declaration"));
-        self.visit_fn_defs(get_children_of_kind(&root_node, "function_definition"), code);
+        // self.visit_using_decls(get_children_of_kind(&root_node, "using_declaration"));
+        self.visit_fn_defs(
+            get_children_of_kind(&root_node, "function_definition"),
+            code,
+        );
     }
 }
 
@@ -186,15 +189,12 @@ impl<'tree> Instrumenter {
                     .child(1)
                     .unwrap();
                 target_ref.to_source(code)
-            },
+            }
             _ => unreachable!(),
         };
 
         let fn_body = pass_entry.child_by_field_name("body").unwrap();
-        let init_str = format!(
-            "{};\n  ",
-            hook::on_start(&pass_target, &self.target_file),
-        );
+        let init_str = format!("{};\n  ", hook::on_start(&pass_target, &self.target_file),);
         self.add_insert_edit(init_str, fn_body.child(1).unwrap().start_byte());
 
         let return_stmts = get_children_of_kind(&fn_body, "return_statement");
@@ -333,7 +333,7 @@ impl<'tree> Instrumenter {
                     let move_target = callee.child_by_field_name("argument").unwrap();
                     let field_op = callee.child(1).unwrap().to_source(code);
                     let ref_op = if field_op.as_str() == "->" { "" } else { "&" };
-                    
+
                     self.add_insert_edit(String::from("{ "), call.start_byte());
 
                     let insert_str = format!(
@@ -421,9 +421,24 @@ impl<'tree> Instrumenter {
                             )
                         );
 
-                        let replace_str = format!("{{ {} {} {} }}", prepare_str, inst_repl_str, hook_str);
+                        let replace_str =
+                            format!("{{ {} {} {} }}", prepare_str, inst_repl_str, hook_str);
                         self.add_replace_edit(replace_str, call.start_byte(), call.end_byte() + 1);
                     }
+                }
+                Some(FnKind::Remove) => {
+                    let called_obj = callee.child_by_field_name("argument").unwrap();
+                    let insert_str = format!(
+                        "{{ {}; ",
+                        hook::on_remove(
+                            &called_obj.to_source(code),
+                            call.start_position().row,
+                            &called_obj.to_source(code)
+                        )
+                    );
+                    self.add_insert_edit(insert_str, call.start_byte());
+                    let insert_str = format!("}}");
+                    self.add_insert_edit(insert_str, call.end_byte() + 1);
                 }
                 Some(FnKind::DLUpdate) => {
                     if callee_name.as_str() == "setDebugLoc" {}

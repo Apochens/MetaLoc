@@ -49,6 +49,8 @@ const DL_UPDATE_FN: [&str; 4] = ["setDebugLoc", "applyMergedLocation", "dropLoca
 
 // const INSERT_FN: [&str; 3] = ["insertBefore", "insertAfter", "insertInto"];
 
+const REMOVE_FN: [&str; 1] = ["eraseFromParent"];
+
 #[derive(PartialEq)]
 pub enum FnKind {
     Create,
@@ -56,7 +58,7 @@ pub enum FnKind {
     Move,
     UseReplace,
     DLUpdate,
-    Delete,
+    Remove,
 }
 
 pub trait FnMatch {
@@ -82,6 +84,9 @@ impl FnMatch for String {
         }
         if DL_UPDATE_FN.contains(&self.as_str()) {
             return Some(FnKind::DLUpdate);
+        }
+        if REMOVE_FN.contains(&self.as_str()) {
+            return Some(FnKind::Remove);
         }
         None
     }
