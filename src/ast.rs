@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use colored::Colorize;
 use tree_sitter::Node;
 
@@ -55,30 +57,30 @@ impl<'tree> AstNode for Node<'tree> {
     }
 }
 
-pub enum ASTNodeKind {
-    HeaderInclude,
-    UsingDecl,
-    FnDef,
-    CallExpr,
-    NewExpr,
-    FieldExpr,
-}
+// pub enum ASTNodeKind {
+//     HeaderInclude,
+//     UsingDecl,
+//     FnDef,
+//     CallExpr,
+//     NewExpr,
+//     FieldExpr,
+// }
 
-impl ASTNodeKind {
-    pub fn to_string(&self) -> &'static str {
-        match self {
-            ASTNodeKind::HeaderInclude => "preproc_include",
-            ASTNodeKind::UsingDecl => "using_declaration",
-            ASTNodeKind::FnDef => "function_definition",
-            ASTNodeKind::CallExpr => "call_expression",
-            ASTNodeKind::NewExpr => "new_expression",
-            ASTNodeKind::FieldExpr => "field_expression",
-        }
-    }
-}
+// impl ASTNodeKind {
+//     pub fn to_string(&self) -> &'static str {
+//         match self {
+//             ASTNodeKind::HeaderInclude => "preproc_include",
+//             ASTNodeKind::UsingDecl => "using_declaration",
+//             ASTNodeKind::FnDef => "function_definition",
+//             ASTNodeKind::CallExpr => "call_expression",
+//             ASTNodeKind::NewExpr => "new_expression",
+//             ASTNodeKind::FieldExpr => "field_expression",
+//         }
+//     }
+// }
 
-impl Into<&str> for ASTNodeKind {
-    fn into(self) -> &'static str {
-        self.to_string()
-    }
-}
+// impl Into<&str> for ASTNodeKind {
+//     fn into(self) -> &'static str {
+//         self.to_string()
+//     }
+// }

@@ -119,7 +119,6 @@ impl<'tree> Instrumenter {
         let root_node = tree.root_node();
 
         self.visit_header_includes(get_children_of_kind(&root_node, "preproc_include"));
-        // self.visit_using_decls(get_children_of_kind(&root_node, "using_declaration"));
         self.visit_fn_defs(
             get_children_of_kind(&root_node, "function_definition"),
             code,
@@ -132,11 +131,6 @@ impl<'tree> Instrumenter {
     fn visit_header_includes(&mut self, nodes: Vec<Node>) {
         assert_eq!(nodes.is_empty(), false, "No header files included!");
         self.add_insert_edit(hook::HEADER_INCLUDE.to_string(), nodes[0].start_byte());
-    }
-
-    fn visit_using_decls(&mut self, nodes: Vec<Node>) {
-        assert_eq!(nodes.is_empty(), false, "No using declaration in the code!");
-        self.add_insert_edit(hook::GLOBAL_VAR_DECL.to_string(), nodes[0].end_byte() + 1);
     }
 
     fn visit_fn_defs(&mut self, nodes: Vec<Node>, code: &str) {

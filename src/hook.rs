@@ -1,5 +1,4 @@
 pub const HEADER_INCLUDE: &str = "#include \"llvm/Transforms/Utils/DLMonitor.h\"\n";
-pub const GLOBAL_VAR_DECL: &str = "namespace { DLMonitor *DLM = nullptr; }\n";
 
 /// Hook for OnStart
 pub fn on_start(pass_target: &str, pass_name: &str) -> String {

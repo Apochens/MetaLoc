@@ -65,6 +65,7 @@ pub fn get_fn_identifier<'tree>(fn_def: &Node<'tree>) -> Node<'tree> {
     identifier
 }
 
+#[allow(dead_code)]
 pub fn get_ident_from_call<'tree>(
     fn_call: &Node<'tree>,
     fn_name_str: &str,
