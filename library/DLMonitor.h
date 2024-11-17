@@ -11,6 +11,7 @@
 using namespace llvm;
 
 using Inst = std::pair<hash_code, StringRef>;
+using LineInfo = unsigned;
 
 /// @brief Debug location collector. 
 ///        Statically collect debug locations on simple paths in given CFG.
@@ -192,11 +193,29 @@ public:
 private:
     InstKind IK;
     StringRef VarName;
-    unsigned SrcLine;
+    LineInfo SrcLine;
 
-    UpdateKind UK;
     DenseSet<hash_code> Srcs;
-    SmallVector<std::pair<Event, unsigned>> Events;
+    SmallVector<std::pair<Event, LineInfo>> Events;
+public:
+    void setDebugLocUpdate(UpdateKind Kind, LineInfo SrcLine) {
+        UK = Kind;
+        UpdateLine = SrcLine;
+    }
+
+    std::pair<UpdateKind, LineInfo> getDebugLocUpdate() const {
+        if (UK != UpdateKind::None)
+            return { UK, UpdateLine };
+        
+        if (IK == InstKind::Create)
+            return { UpdateKind::Drop, 0 };
+        
+        if (IK == InstKind::Clone || IK == InstKind::Move)
+            return { UpdateKind::Preserve, 0 };
+    }
+private:
+    UpdateKind UK;
+    unsigned UpdateLine;
 };
 
 /// @brief Debug Location Monitor
@@ -229,7 +248,7 @@ public:
         DebugLocAfterOpt = new DebugLocInfo(TargetF);
 
         for (auto [Dst, Stat]: InstToStat) {
-            outs() << "Checking " << Stat->getName() << "...\n";
+            // outs() << "Checking " << Stat->getName() << "...\n";
             DenseSet<int> &DebugLocsOfDst = DebugLocAfterOpt->queryDebugLocSet(Dst);
             DenseSet<int> DebugLocsOfSrc = {};
 
@@ -262,25 +281,35 @@ public:
                     break;
                 }
 
+            auto [UKind, SrcLine] = Stat->getDebugLocUpdate();
+
             if (HasConflict) {
-                // Should drop the debug location
-                outs().changeColor(outs().RED, true);
-                outs() << "DROP: ";
-                outs().resetColor();
+                checkUpdate(UKind, UpdateKind::Drop);
+                outs() << "LINE " << Stat->getLine() << ", DROP(" << Stat->getName() << ")  ";
             } else {
                 if (NumberOfSrc == 1) {
-                    outs().changeColor(outs().RED, true);
-                    outs() << "PRESERVE: ";
-                    outs().resetColor();
+                    checkUpdate(UKind, UpdateKind::Preserve);
+                    outs() << "LINE " << Stat->getLine() << ", PRESERVE(" << Stat->getName() << ")  ";
                 } else {
-                    outs().changeColor(outs().RED, true);
-                    outs() << "MERGE: ";
-                    outs().resetColor();
+                    checkUpdate(UKind, UpdateKind::Merge);
+                    outs() << "LINE " << Stat->getLine() << ", MERGE(" << Stat->getName() << ")  ";
                 }
             }
-            outs() << Stat->getName() << " at line " << Stat->getLine() << " with events [";
+            outs() << "Events {";
             Stat->printEvents(outs());
-            outs() << "]\n";
+            outs() << "}\n";
+        }
+    }
+
+    void checkUpdate(UpdateKind UKind, UpdateKind EUKind) {
+        if (UKind == EUKind) {
+            outs().changeColor(outs().GREEN, true);
+            outs() << "PASS: ";
+            outs().resetColor();
+        } else {
+            outs().changeColor(outs().RED, true);
+            outs() << "FAIL: ";
+            outs().resetColor();
         }
     }
 private:
@@ -394,9 +423,29 @@ namespace hook {
     /*
      * Track debug location updates
      */
-    void OnPreserve(DLMonitor *DLM);
-    void OnMerge(DLMonitor *DLM);
-    void OnDrop(DLMonitor *DLM);
+    void OnPreserve(Value *DV, unsigned SrcLine) {
+        Instruction *DI = dyn_cast<Instruction>(DV);
+        if (DI == nullptr)
+            return;
+
+        DLM->InstToStat[hash_value(DI)]->setDebugLocUpdate(UpdateKind::Preserve, SrcLine);
+    }
+
+    void OnMerge(Value *DV, unsigned SrcLine) {
+        Instruction *DI = dyn_cast<Instruction>(DV);
+        if (DI == nullptr)
+            return;
+
+        DLM->InstToStat[hash_value(DI)]->setDebugLocUpdate(UpdateKind::Merge, SrcLine);
+    }
+
+    void OnDrop(Value *DV, unsigned SrcLine) {
+        Instruction *DI = dyn_cast<Instruction>(DV);
+        if (DI == nullptr)
+            return;
+
+        DLM->InstToStat[hash_value(DI)]->setDebugLocUpdate(UpdateKind::Drop, SrcLine);
+    }
 }
 
 #endif // LLVM_TRANSFORM_UTILS_DL_MONITOR_H
