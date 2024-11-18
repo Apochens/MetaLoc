@@ -126,9 +126,6 @@ def draw_affected_versions_and_latent_times_by_error():
         end = datetime.strptime("2024/05/05", "%Y/%m/%d")
         rt = relativedelta(end, start)
         latent_times.append(rt.years * 12 + rt.months)
-
-        if rt.years * 12 + rt.months > 175:
-            print(date)
     
     plt.figure(figsize=(5, 3))
     plt.grid(True)
@@ -142,4 +139,3 @@ def draw_affected_versions_and_latent_times_by_error():
 if __name__ == "__main__":
     draw_errors_by_version()
     draw_affected_versions_and_latent_times_by_error()
-
