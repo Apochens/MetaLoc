@@ -78,6 +78,25 @@ def instrument(pass_path: str):
     os.system(command)
 
 
+def synthesize_cmd(command: str, test_case: str) -> str:
+    # extract the command between "RUN:" and "|"
+    command = command.split("; RUN:")[1].split("|")[0].strip()
+    # replace the "< %s" in command with the file name
+    command = command.replace("< %s", test_case) \
+        .replace("%s", test_case) \
+        .replace("opt", LLVM_OPT + " --disable-output", count=1)
+    # insert "debugify" after "-passes=" in command
+    if "-passes=\"" in command:
+        command = command.replace("-passes=\"", "-passes=\"debugify,")
+    elif "-passes=\'" in command:
+        command = command.replace("-passes=\'", "-passes=\'debugify,")
+    else:
+        print("here")
+        command = command.replace("-passes=", "-passes=debugify,")
+    
+    return command
+
+
 def execute(test_path: str):
     logging.info(f"Running tests under {test_path}")
 
@@ -95,20 +114,7 @@ def execute(test_path: str):
             with open(file, "r") as f:
                 for line in f:
                     if line.startswith("; RUN:"):
-                        # extract the command between "RUN:" and "|"
-                        command = line.split("; RUN:")[1].split("|")[0].strip()
-                        # replace the "< %s" in command with the file name
-                        command = command.replace("< %s", file) \
-                            .replace("%s", file) \
-                            .replace("opt", LLVM_OPT + " --disable-output", count=1)
-                        # insert "debugify" after "-passes=" in command
-                        if "-passes=\"" in command:
-                            command = command.replace("-passes=\"", "-passes=\"debugify,")
-                        elif "-passes=\'" in command:
-                            command = command.replace("-passes=\'", "-passes=\'debugify,")
-                        else:
-                            print("here")
-                            command = command.replace("-passes=", "-passes=debugify,")
+                        command = synthesize_cmd(line, file)
                         # execute the command and record the output
                         try:
                             logging.info(f"Running command: {command}")
@@ -153,6 +159,9 @@ if __name__ == "__main__":
         execute(sys.argv[2])
     elif task == Task.CLEAN:
         clean()
+    else:
+        logging.error(f"Invalid task {task}. Please specify one of the following: {Task.SETUP}, {Task.INSTRUMENT}, {Task.RUN}, {Task.CLEAN}")
+        exit(1)
 
 
                         
