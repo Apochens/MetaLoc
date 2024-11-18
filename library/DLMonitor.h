@@ -252,7 +252,6 @@ public:
         DebugLocAfterOpt = new DebugLocInfo(TargetF);
 
         for (auto [Dst, Stat]: InstToStat) {
-            // outs() << "Checking " << Stat->getName() << "...\n";
             DenseSet<int> &DebugLocsOfDst = DebugLocAfterOpt->queryDebugLocSet(Dst);
             DenseSet<int> DebugLocsOfSrc = {};
 
@@ -260,13 +259,8 @@ public:
             int NumberOfSrc = Srcs.size();
 
             // If the instruction does not replace any other instructions
-            if (NumberOfSrc == 0) {
-                outs().changeColor(outs().YELLOW, true);
-                outs() << "WARNING: ";
-                outs().resetColor();
-                outs() << "LINE " << Stat->getLine() << " UNKNOWN(" << Stat->getName() << ")\n";
+            if (NumberOfSrc == 0)
                 continue;
-            }
 
             // Debug location conflict detection
             bool HasConflict = false;
