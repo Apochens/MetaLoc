@@ -293,6 +293,7 @@ impl<'tree> Instrumenter {
                                 &format!("{}{}", addr_op, original_inst.to_source(code)),
                                 parent_decl.row(),
                                 &var_name.to_source(code),
+                                &original_inst.to_source(code),
                             )
                         );
                         self.add_insert_edit(insert_str, parent_decl.end_byte());
@@ -313,6 +314,7 @@ impl<'tree> Instrumenter {
                                 &format!("{}{}", addr_op, original_inst.to_source(code)),
                                 parent_assign.row(),
                                 &var_name.to_source(code),
+                                &original_inst.to_source(code),
                             )
                         );
                         self.add_insert_edit(insert_str, parent_assign.end_byte() + 1);
@@ -335,7 +337,7 @@ impl<'tree> Instrumenter {
                         hook::on_move(
                             &format!("{}{}", ref_op, move_target.to_source(code)),
                             call.row(),
-                            &move_target.to_source(code)
+                            &move_target.to_source(code),
                         )
                     );
                     self.add_insert_edit(insert_str, call.end_byte() + 1);
@@ -375,7 +377,8 @@ impl<'tree> Instrumenter {
                                 "DebugLocSrc",
                                 "DebugLocDst",
                                 call.row(),
-                                &debugloc_dst.to_source(code)
+                                &debugloc_dst.to_source(code),
+                                &debugloc_src.to_source(code),
                             )
                         );
 
@@ -411,7 +414,8 @@ impl<'tree> Instrumenter {
                                 "DebugLocSrc",
                                 "DebugLocDst",
                                 call.row(),
-                                &new_inst.to_source(code)
+                                &new_inst.to_source(code),
+                                &old_inst.to_source(code),
                             )
                         );
 
@@ -434,14 +438,38 @@ impl<'tree> Instrumenter {
                     let insert_str = format!("}}");
                     self.add_insert_edit(insert_str, call.end_byte() + 1);
                 }
-                Some(FnKind::DLUpdate) => {
-                    if callee_name.as_str() == "setDebugLoc" {}
+                Some(FnKind::DLPreserve) => {
+                    let dst_inst = callee.child_by_field_name("argument").unwrap();
+                    let insert_str = format!("{{ ");
+                    self.add_insert_edit(insert_str, call.start_byte());
 
-                    if callee_name.as_str() == "applyMergedLocation" {}
+                    let insert_str = format!(
+                        " {}; }}",
+                        hook::on_preserve(&dst_inst.to_source(code), call.row())
+                    );
+                    self.add_insert_edit(insert_str, call.end_byte() + 1);
+                }
+                Some(FnKind::DLMerge) => {
+                    let dst_inst = callee.child_by_field_name("argument").unwrap();
+                    let insert_str = format!("{{ ");
+                    self.add_insert_edit(insert_str, call.start_byte());
 
-                    if callee_name.as_str() == "dropLocation"
-                        || callee_name.as_str() == "updateLocationAfterHoist"
-                    {}
+                    let insert_str = format!(
+                        " {}; }}",
+                        hook::on_merge(&dst_inst.to_source(code), call.row())
+                    );
+                    self.add_insert_edit(insert_str, call.end_byte() + 1);
+                }
+                Some(FnKind::DLDrop) => {
+                    let dst_inst = callee.child_by_field_name("argument").unwrap();
+                    let insert_str = format!("{{ ");
+                    self.add_insert_edit(insert_str, call.start_byte());
+
+                    let insert_str = format!(
+                        " {}; }}",
+                        hook::on_drop(&dst_inst.to_source(code), call.row())
+                    );
+                    self.add_insert_edit(insert_str, call.end_byte() + 1);
                 }
                 _ => {}
             };

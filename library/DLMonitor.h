@@ -22,6 +22,10 @@ public:
         collect(F);
     }
 
+    bool containsInst(hash_code InstHash) const {
+        return InstToBB.contains(InstHash);
+    }
+
     DenseSet<int> &queryDebugLocSet(hash_code InstHash) {
         return BBToDebugLocs[InstToBB[InstHash]];
     }
@@ -166,8 +170,8 @@ public:
     DLStat(InstKind IK, unsigned SL, StringRef VN)
         : IK(IK), VarName(VN), SrcLine(SL), UK(UpdateKind::None) {}
 
-    void addSrc(hash_code SrcHash) { Srcs.insert(SrcHash); }
-    DenseSet<hash_code> &srcs() { return Srcs; }
+    void addSrc(hash_code SrcHash, StringRef SrcName) { Srcs.insert({SrcHash, SrcName}); }
+    DenseSet<Inst> &srcs() { return Srcs; }
 
     unsigned getLine() const { return SrcLine; }
     StringRef getName() const { return VarName; }
@@ -195,7 +199,7 @@ private:
     StringRef VarName;
     LineInfo SrcLine;
 
-    DenseSet<hash_code> Srcs;
+    DenseSet<Inst> Srcs;
     SmallVector<std::pair<Event, LineInfo>> Events;
 public:
     void setDebugLocUpdate(UpdateKind Kind, LineInfo SrcLine) {
@@ -252,7 +256,7 @@ public:
             DenseSet<int> &DebugLocsOfDst = DebugLocAfterOpt->queryDebugLocSet(Dst);
             DenseSet<int> DebugLocsOfSrc = {};
 
-            DenseSet<hash_code> Srcs = Stat->srcs();
+            DenseSet<Inst> Srcs = Stat->srcs();
             int NumberOfSrc = Srcs.size();
 
             // If the instruction does not replace any other instructions
@@ -260,23 +264,26 @@ public:
                 outs().changeColor(outs().YELLOW, true);
                 outs() << "WARNING: ";
                 outs().resetColor();
-                if (Stat->getInstKind() == InstKind::Create) {
-                    outs() << "No debug location for ";
-                }
-                if (Stat->getInstKind() == InstKind::Clone) {
-                    outs() << "Retain original debug location for ";
-                }
-                outs() << Stat->getName() << " at line " << Stat->getLine() << "\n";
+                outs() << "LINE " << Stat->getLine() << " UNKNOWN(" << Stat->getName() << ")\n";
                 continue;
             }
 
             // Debug location conflict detection
             bool HasConflict = false;
-            for (hash_code Src: Srcs)
-                for (int Line: DebugLocBeforeOpt->queryDebugLocSet(Src))
-                    DebugLocsOfSrc.insert(Line);
+            bool AllSrcInstsExist = true;
+            for (auto [Src, Name]: Srcs)
+                if (DebugLocBeforeOpt->containsInst(Src)) {
+                    for (int Line: DebugLocBeforeOpt->queryDebugLocSet(Src))
+                        DebugLocsOfSrc.insert(Line);
+                } else {
+                    AllSrcInstsExist = false;
+                    break;
+                }
+            if (!AllSrcInstsExist) continue;
+
             for (int Line: DebugLocsOfDst)
                 if (!DebugLocsOfSrc.contains(Line)) {
+                    outs() << Stat->getName() << ": " << Line << "\n";
                     HasConflict = true;
                     break;
                 }
@@ -289,11 +296,14 @@ public:
             } else {
                 if (NumberOfSrc == 1) {
                     checkUpdate(UKind, UpdateKind::Preserve);
-                    outs() << "LINE " << Stat->getLine() << ", PRESERVE(" << Stat->getName() << ")  ";
+                    outs() << "LINE " << Stat->getLine() << ", PRESERVE(" << Stat->getName();
                 } else {
                     checkUpdate(UKind, UpdateKind::Merge);
-                    outs() << "LINE " << Stat->getLine() << ", MERGE(" << Stat->getName() << ")  ";
+                    outs() << "LINE " << Stat->getLine() << ", MERGE(" << Stat->getName();
                 }
+                for (Inst inst: Srcs)
+                    outs() << ", " << inst.second;
+                outs() << ")  ";
             }
             outs() << "Events {";
             Stat->printEvents(outs());
@@ -362,7 +372,7 @@ namespace hook {
             if (!DLM->BBToOldTerm.contains(HashOfBB)) {
                 DLM->BBToNewTerm[HashOfBB] = {HashOfInst, VarName};
             } else {
-                DLM->InstToStat[HashOfInst]->addSrc(DLM->BBToOldTerm[HashOfBB].first);
+                DLM->InstToStat[HashOfInst]->addSrc(DLM->BBToOldTerm[HashOfBB].first, DLM->BBToOldTerm[HashOfBB].second);
                 DLM->InstToStat[HashOfInst]->addEvent(Event::UseReplace, 0);
                 DLM->BBToOldTerm.erase(HashOfBB);
             }
@@ -372,30 +382,30 @@ namespace hook {
     void OnMove(Value *V, unsigned SrcLine, StringRef VarName) {
         if (Instruction *I = dyn_cast<Instruction>(V)) {
             DLM->InstToStat[hash_value(I)] = new DLStat(InstKind::Move, SrcLine, VarName);
-            DLM->InstToStat[hash_value(I)]->addSrc(hash_value(I));
+            DLM->InstToStat[hash_value(I)]->addSrc(hash_value(I), VarName);
             DLM->InstToStat[hash_value(I)]->addEvent(Event::Move, SrcLine);
         }
     }
 
-    void OnClone(Value *NV, Value *OV, unsigned SrcLine, StringRef VarName) {
+    void OnClone(Value *NV, Value *OV, unsigned SrcLine, StringRef VarName, StringRef OldValName) {
         Instruction *NI = dyn_cast<Instruction>(NV);
         Instruction *OI = dyn_cast<Instruction>(OV);
 
         if (!NI || !OI) return ;
 
         DLM->InstToStat[hash_value(NI)] = new DLStat(InstKind::Clone, SrcLine, VarName);
-        DLM->InstToStat[hash_value(NI)]->addSrc(hash_value(OI));
+        DLM->InstToStat[hash_value(NI)]->addSrc(hash_value(OI), OldValName);
         DLM->InstToStat[hash_value(NI)]->addEvent(Event::Clone, SrcLine);
     }
 
-    void OnUseReplace(Value *From, Value *To, unsigned SrcLine, StringRef VarName) {
+    void OnUseReplace(Value *From, Value *To, unsigned SrcLine, StringRef VarName, StringRef OldValName) {
         Instruction *FromI = dyn_cast<Instruction>(From);
         Instruction *ToI = dyn_cast<Instruction>(To);
 
         if (!FromI || !ToI) return ;
 
         if (DLM->InstToStat.contains(hash_value(ToI))) {
-            DLM->InstToStat[hash_value(ToI)]->addSrc(hash_value(FromI));
+            DLM->InstToStat[hash_value(ToI)]->addSrc(hash_value(FromI), OldValName);
             DLM->InstToStat[hash_value(ToI)]->addEvent(Event::UseReplace, SrcLine);
         }
     }
@@ -413,7 +423,7 @@ namespace hook {
                 DLM->BBToOldTerm[HashOfBB] = { HashOfInst, VarName };
             } else {
                 hash_code UDst = DLM->BBToNewTerm[HashOfBB].first;
-                DLM->InstToStat[UDst]->addSrc(HashOfInst);
+                DLM->InstToStat[UDst]->addSrc(HashOfInst, VarName);
                 DLM->InstToStat[UDst]->addEvent(Event::UseReplace, SrcLine);
                 DLM->BBToNewTerm.erase(HashOfBB);
             }

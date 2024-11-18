@@ -45,11 +45,15 @@ const MOVE_FN: [&str; 3] = ["moveBefore", "moveBeforePreserving", "moveAfter"];
 
 const USE_REPLACE_FN: [&str; 2] = ["replaceAllUsesWith", "replaceUsesOfWith"];
 
-const DL_UPDATE_FN: [&str; 4] = ["setDebugLoc", "applyMergedLocation", "dropLocation", "updateLocationAfterHoist"];
-
 // const INSERT_FN: [&str; 3] = ["insertBefore", "insertAfter", "insertInto"];
 
 const REMOVE_FN: [&str; 1] = ["eraseFromParent"];
+
+const DL_PRESERVE_FN: [&str; 1] = ["setDebugLoc"];
+
+const DL_MERGE_FN: [&str; 1] = ["applyMergedLocation"];
+
+const DLDROP_FN: [&str; 2] = ["dropLocation", "updateLocationAfterHoist"];
 
 #[derive(PartialEq)]
 pub enum FnKind {
@@ -57,8 +61,10 @@ pub enum FnKind {
     Clone,
     Move,
     UseReplace,
-    DLUpdate,
     Remove,
+    DLPreserve,
+    DLMerge,
+    DLDrop,
 }
 
 pub trait FnMatch {
@@ -82,9 +88,17 @@ impl FnMatch for String {
         if USE_REPLACE_FN.contains(&self.as_str()) {
             return Some(FnKind::UseReplace);
         }
-        if DL_UPDATE_FN.contains(&self.as_str()) {
-            return Some(FnKind::DLUpdate);
+
+        if DL_PRESERVE_FN.contains(&self.as_str()) {
+            return Some(FnKind::DLPreserve);
         }
+        if DL_MERGE_FN.contains(&self.as_str()) {
+            return Some(FnKind::DLMerge);
+        }
+        if DLDROP_FN.contains(&self.as_str()) {
+            return Some(FnKind::DLDrop);
+        }
+
         if REMOVE_FN.contains(&self.as_str()) {
             return Some(FnKind::Remove);
         }
