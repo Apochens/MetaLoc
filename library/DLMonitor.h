@@ -235,11 +235,11 @@ public:
         DebugLocBeforeOpt = new DebugLocInfo(&F);
 
         // Open the log output stream
-        StringRef LogDir = "./tmp";
-        sys::fs::create_directories(LogDir);
-        std::error_code ErrorCode;
-        Twine FileName = LogDir + PassName;
-        Logs = new raw_fd_ostream(FileName.str(), ErrorCode, sys::fs::OpenFlags::OF_Append);
+        // StringRef LogDir = "./tmp";
+        // sys::fs::create_directories(LogDir);
+        // std::error_code ErrorCode;
+        // Twine FileName = LogDir + PassName;
+        // Logs = new raw_fd_ostream(FileName.str(), ErrorCode, sys::fs::OpenFlags::OF_Append);
     }
 
     ~DLMonitor() {
