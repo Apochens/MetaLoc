@@ -1,7 +1,7 @@
 # Artifact Evaluation
 
-To eliminate the need for LLVM compilation and facilitate tool evaluation, we provide a pre-configured image `aposhan/metaloc`.
-The container includes:  
+To eliminate the need for LLVM compilation and facilitate tool evaluation, we provide a pre-configured image (`docker pull aposhan/metaloc`).
+The container includes:
     (1) the tool's source code (`MetaLoc/`),  
     (2) the LLVM project (`llvm-trunk/`),  
     (3) three precompiled LLVM `opt` binaries along with the corresponding LLVM IR programs (`evaluation/`).
