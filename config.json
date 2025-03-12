@@ -1,4 +1,4 @@
 {
-    "llvm": "~/Code/llvm-project/llvm",
-    "opt": "~/Code/build-llvm/bin/opt"
+    "llvm": "~/llvm-project/llvm",
+    "opt": "~/build-llvm/bin/opt"
 }

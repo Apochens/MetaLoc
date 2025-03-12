@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 import json
-from enum import StrEnum
+import argparse
 
 
 logging.basicConfig(level=logging.INFO)
@@ -14,12 +14,10 @@ METALOC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LLVM_ROOT = ""
 LLVM_OPT = ""
 
-
-class Task(StrEnum):
-    SETUP = "setup"
-    INSTRUMENT = "instrument"
-    RUN = "run"
-    CLEAN = "clean"
+TASK_SETUP = "setup"
+TASK_INSTRUMENT = "instrument"
+TASK_ANALYZE = "analyze"
+TASK_CLEAN = "clean"
 
 
 def config_parse(task: str):
@@ -28,14 +26,14 @@ def config_parse(task: str):
     # check if the llvm path is valid
     global LLVM_ROOT
     LLVM_ROOT = os.path.expanduser(config["llvm"])
-    if (task == Task.SETUP or task == Task.INSTRUMENT) and not (os.path.exists(LLVM_ROOT) and os.path.isdir(LLVM_ROOT)):
+    if (task == TASK_SETUP or task == TASK_INSTRUMENT) and not (os.path.exists(LLVM_ROOT) and os.path.isdir(LLVM_ROOT)):
         logging.error(f"LLVM path {LLVM_ROOT} does not exist")
         exit(1)
 
     # check if the opt path is valid
     global LLVM_OPT
     LLVM_OPT = os.path.expanduser(config["opt"])
-    if task == Task.RUN and not os.path.exists(LLVM_OPT):
+    if task == TASK_ANALYZE and not os.path.exists(LLVM_OPT):
         logging.error(f"LLVM opt path {LLVM_OPT} does not exist")
         exit(1)
 
@@ -84,7 +82,7 @@ def synthesize_cmd(command: str, test_case: str) -> str:
     # replace the "< %s" in command with the file name
     command = command.replace("< %s", test_case) \
         .replace("%s", test_case) \
-        .replace("opt", LLVM_OPT + " --disable-output", count=1)
+        .replace("opt", LLVM_OPT + " --disable-output", 1)
     # insert "debugify" after "-passes=" in command
     if "-passes=\"" in command:
         command = command.replace("-passes=\"", "-passes=\"debugify,")
@@ -97,7 +95,7 @@ def synthesize_cmd(command: str, test_case: str) -> str:
     return command
 
 
-def execute(test_path: str):
+def analyze(test_path: str):
     logging.info(f"Running tests under {test_path}")
 
     # iterate the test path and record all the files under the test path and the subdirectories
@@ -142,25 +140,35 @@ def clean():
 
 
 if __name__ == "__main__":
-    task = sys.argv[1]
+    # parser = argparse.ArgumentParser(
+    #     description="MetaLoc: Robustify debug location updates in LLVM"
+    # )
+    # parser.add_argument(
+    #     "task",
+    #     choices=[TASK_SETUP, TASK_INSTRUMENT, TASK_ANALYZE, TASK_CLEAN],
+    #     help="The task to perform"
+    # )
+    # args = parser.parse_args()
+
+    task: str = sys.argv[1]
     config_parse(task)
 
-    if task == Task.SETUP:
+    if task == TASK_SETUP:
         setup()
-    elif task == Task.INSTRUMENT:
+    elif task == TASK_INSTRUMENT:
         if len(sys.argv) < 3:
             logging.error("Please specify the path to the pass")
             exit(1)
         instrument(sys.argv[2])
-    elif task == Task.RUN:
+    elif task == TASK_ANALYZE:
         if len(sys.argv) < 3:
             logging.error("Please specify the path to the tests")
             exit(1)
-        execute(sys.argv[2])
-    elif task == Task.CLEAN:
+        analyze(sys.argv[2])
+    elif task == TASK_CLEAN:
         clean()
     else:
-        logging.error(f"Invalid task {task}. Please specify one of the following: {Task.SETUP}, {Task.INSTRUMENT}, {Task.RUN}, {Task.CLEAN}")
+        logging.error(f"Invalid task {task}. Please specify one of the following: {TASK_SETUP}, {TASK_INSTRUMENT}, {TASK_ANALYZE}, {TASK_CLEAN}")
         exit(1)
 
 

@@ -18,7 +18,7 @@ using LineInfo = unsigned;
 class DebugLocInfo {
 public:
     DebugLocInfo(Function *F) {
-        outs() << "|===============<" << F->getName() << ">===============|\n";
+        // outs() << "|===============<" << F->getName() << ">===============|\n";
         collect(F);
     }
 
@@ -43,11 +43,11 @@ private:
         // compute all debug locations in each basic block
         for (BasicBlock &BB: *F) {
             // collectCompDLOnControlFlowPaths(&BB);
-            outs() << "DLSet<" << BB.getName() << ">: ";
-            for (int line: BBToDebugLocs[hash_value(&BB)]) {
-                outs() << line << " ";
-            }
-            outs() << "\n";
+            // outs() << "DLSet<" << BB.getName() << ">: ";
+            // for (int line: BBToDebugLocs[hash_value(&BB)]) {
+            //     outs() << line << " ";
+            // }
+            // outs() << "\n";
             for (Instruction &I: BB) {
                 InstToBB[hash_value(&I)] = hash_value(&BB);
             }
@@ -245,7 +245,6 @@ public:
     ~DLMonitor() {
         delete DebugLocBeforeOpt;
         delete DebugLocAfterOpt;
-        delete Logs;
     }
 
     void onOptFinished() {
@@ -261,10 +260,10 @@ public:
 
             // If the instruction does not replace any other instructions
             if (NumberOfSrc == 0) {
-                outs().changeColor(outs().YELLOW, true);
-                outs() << "WARNING: ";
-                outs().resetColor();
-                outs() << "LINE " << Stat->getLine() << " UNKNOWN(" << Stat->getName() << ")\n";
+                // outs().changeColor(outs().YELLOW, true);
+                // outs() << "WARNING: ";
+                // outs().resetColor();
+                // outs() << "LINE " << Stat->getLine() << " UNKNOWN(" << Stat->getName() << ")\n";
                 continue;
             }
 
@@ -283,7 +282,7 @@ public:
 
             for (int Line: DebugLocsOfDst)
                 if (!DebugLocsOfSrc.contains(Line)) {
-                    outs() << Stat->getName() << ": " << Line << "\n";
+                    // outs() << Stat->getName() << ": " << Line << "\n";
                     HasConflict = true;
                     break;
                 }
@@ -291,35 +290,42 @@ public:
             auto [UKind, SrcLine] = Stat->getDebugLocUpdate();
 
             if (HasConflict) {
-                checkUpdate(UKind, UpdateKind::Drop);
-                outs() << "LINE " << Stat->getLine() << ", DROP(" << Stat->getName() << ")  ";
+                if (!checkUpdate(UKind, UpdateKind::Drop))
+                    outs() << "LINE " << Stat->getLine() << ", DROP(" << Stat->getName() << ")\n";
             } else {
                 if (NumberOfSrc == 1) {
-                    checkUpdate(UKind, UpdateKind::Preserve);
-                    outs() << "LINE " << Stat->getLine() << ", PRESERVE(" << Stat->getName();
+                    if (!checkUpdate(UKind, UpdateKind::Preserve)) {
+                        outs() << "LINE " << Stat->getLine() << ", PRESERVE(" << Stat->getName();
+                        for (Inst inst: Srcs)
+                            outs() << ", " << inst.second;
+                            outs() << ")\n";
+                    }
                 } else {
-                    checkUpdate(UKind, UpdateKind::Merge);
-                    outs() << "LINE " << Stat->getLine() << ", MERGE(" << Stat->getName();
+                    if (!checkUpdate(UKind, UpdateKind::Merge)) {
+                        outs() << "LINE " << Stat->getLine() << ", MERGE(" << Stat->getName();
+                        for (Inst inst: Srcs)
+                            outs() << ", " << inst.second;
+                            outs() << ")\n";
+                    }
                 }
-                for (Inst inst: Srcs)
-                    outs() << ", " << inst.second;
-                outs() << ")  ";
             }
-            outs() << "Events {";
-            Stat->printEvents(outs());
-            outs() << "}\n";
+            // outs() << "Events {";
+            // Stat->printEvents(outs());
+            // outs() << "}\n";
         }
     }
 
-    void checkUpdate(UpdateKind UKind, UpdateKind EUKind) {
+    bool checkUpdate(UpdateKind UKind, UpdateKind EUKind) {
         if (UKind == EUKind) {
-            outs().changeColor(outs().GREEN, true);
-            outs() << "PASS: ";
-            outs().resetColor();
+            // outs().changeColor(outs().GREEN, true);
+            // outs() << "PASS: ";
+            // outs().resetColor();
+            return true;
         } else {
             outs().changeColor(outs().RED, true);
             outs() << "FAIL: ";
             outs().resetColor();
+            return false;
         }
     }
 private:
