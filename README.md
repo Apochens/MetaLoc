@@ -1,5 +1,7 @@
 # METALOC: Robustifying Debug Location Updates in LLVM
 
+For artifact evaluation, please check [EVALUATION.md](./EVALUATION.md).
+
 ## Main Components
 
 1. AST-level pass instrumentation tool (Rust, under `src/`)
@@ -15,6 +17,33 @@
     "opt": "your/opt/binary",
 }
 ```
+
+## Compile LLVM
+
+> If the LLVM has already been compiled, please skip.
+
+1. Clone the LLVM repo and install build tools. For saving time, you can add the flag `--depth=1` when cloning.
+
+```bash
+$ git clone https://github.com/llvm/llvm-project.git
+$ sudo apt install ninja-build cmake
+```
+
+2. Initialize the build directory.
+
+```bash
+$ cd llvm-project
+$ cmake -S llvm -B ../build-llvm -G Ninja \
+	-DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=On \
+	-DCMAKE_INSTALL_PREFIX=../llvm
+```
+
+3. Build the `opt`
+
+```bash
+$ cd ../build-llvm && ninja opt
+```
+
 
 ## How to Use
 
@@ -45,9 +74,9 @@ One can simply use `opt` to run the instrumented optimization pass with a specif
 $ opt -S -passes=tailcallelim dropping_debugloc_acc_rec_inst_rnew.ll --disable-output
 ```
 
-Or use the script to run the instrumented pass with a bunch of test cases.
+Or use the script to analyze the instrumented pass with a bunch of test cases.
 ```bash
-$ python3 script/metaloc.py run path/to/llvm/test/Transforms/TailCallElim/
+$ python3 script/metaloc.py analyze path/to/llvm/test/Transforms/TailCallElim/
 ```
 
-In the output resutls, `PASS` indicates the written updates are consistent with the constructed updates, while `FAIL` indicates potential debug location update errors.
+In the output, potential debug location update errors denoted by `FAIL` are printed along with the constructed proper updates.
